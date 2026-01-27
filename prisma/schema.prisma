@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  phone          String    @unique
+  name           String?
+  store_name     String?
+  role           String    @default("user")
+  status         String    @default("pending")
+  vip_level      String    @default("Bronze")
+  total_spent    String    @default("0")
+  wallet_balance String    @default("0")
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  orders         Order[]
+  posts          Post[]
+  receipts       Receipt[]
+
+  @@index([phone])
+  @@index([status])
+  @@map("users")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  parent_id   String?
+  image       String?
+  order       Int        @default(0)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  parent      Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: Cascade)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+
+  @@index([slug])
+  @@index([parent_id])
+  @@map("categories")
+}
+
+model Product {
+  id           String                 @id @default(uuid())
+  name         String
+  slug         String                 @unique
+  description  String?
+  price        String
+  category_id  String
+  image_main   String?
+  stock_count  Int                    @default(0)
+  min_order    Int                    @default(1)
+  in_stock     Boolean                @default(true)
+  is_active    Boolean                @default(true) // نمایش در سایت
+  properties   String?
+  colors       String?
+  created_at   DateTime               @default(now())
+  updated_at   DateTime               @updatedAt
+  reservations InventoryReservation[]
+  orderItems   OrderItem[]
+  category     Category               @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([category_id])
+  @@index([in_stock])
+  @@index([is_active])
+  @@map("products")
+}
+
+model Order {
+  id               String      @id
+  user_id          String
+  status           String      @default("pending_payment")
+  total_amount     String
+  discount_amount  String      @default("0")
+  final_amount     String
+  items            String
+  shipping_address String?
+  receipt_url      String?
+  tracking_code    String?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  orderItems       OrderItem[]
+  user             User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  receipts         Receipt[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  order_id   String
+  product_id String
+  quantity   Int
+  price      String
+  created_at DateTime @default(now())
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  order      Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@index([product_id])
+  @@map("order_items")
+}
+
+model Post {
+  id               String   @id @default(uuid())
+  title            String
+  slug             String   @unique
+  content          String?
+  author_id        String
+  meta_description String?
+  focus_keyword    String?
+  seo_score        Int?
+  status           String   @default("draft")
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  author           User     @relation(fields: [author_id], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([status])
+  @@index([author_id])
+  @@map("posts")
+}
+
+model Receipt {
+  id         String   @id @default(uuid())
+  order_id   String
+  user_id    String
+  image_url  String
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order      Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@index([user_id])
+  @@map("receipts")
+}
+
+model InventoryReservation {
+  id         String   @id @default(uuid())
+  product_id String
+  quantity   Int
+  order_id   String?
+  expires_at DateTime
+  created_at DateTime @default(now())
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+  @@index([expires_at])
+  @@map("inventory_reservations")
+}
+
+model Setting {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model Discount {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique
+  type         String
+  value        String
+  min_purchase String?  @default("0")
+  max_discount String?
+  start_date   DateTime
+  end_date     DateTime
+  is_active    Boolean  @default(true)
+  usage_limit  Int?
+  used_count   Int      @default(0)
+  description  String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@index([code])
+  @@index([is_active])
+  @@map("discounts")
+}
+
+model Media {
+  id            String   @id @default(uuid())
+  filename      String
+  original_name String
+  mime_type     String
+  size          Int
+  url           String
+  alt_text      String?
+  category      String?
+  created_by    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([category])
+  @@index([created_at])
+  @@map("media")
+}
