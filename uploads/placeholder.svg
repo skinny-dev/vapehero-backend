@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="vh-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <radialGradient id="vh-glow" cx="50%" cy="0%" r="80%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#14b8a6" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vh-card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="vh-accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <pattern id="vh-grid" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" stroke="#1e293b" stroke-width="0.75" stroke-opacity="0.6"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="600" fill="url(#vh-bg)"/>
+  <rect width="800" height="600" fill="url(#vh-grid)" opacity="0.35"/>
+
+  <!-- Glow -->
+  <ellipse cx="400" cy="40" rx="420" ry="260" fill="url(#vh-glow)" opacity="0.9"/>
+
+  <!-- Abstract vapor curves -->
+  <path d="M90 520C150 420 210 380 280 360C360 338 430 344 520 372C600 398 660 396 720 380"
+        stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.85"/>
+  <path d="M120 540C190 450 260 420 330 410C410 398 480 408 560 432C630 454 690 454 740 446"
+        stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-opacity="0.8"/>
+  <path d="M150 560C220 495 290 475 360 470C440 463 510 474 580 492C650 508 705 512 745 510"
+        stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.7"/>
+
+  <!-- Center card -->
+  <g transform="translate(180 130)">
+    <rect x="0" y="0" width="440" height="320" rx="40"
+          fill="url(#vh-card)"/>
+    <rect x="0.75" y="0.75" width="438.5" height="318.5" rx="39.25"
+          stroke="url(#vh-accent)" stroke-opacity="0.22" stroke-width="1.5"/>
+    <rect x="-18" y="-18" width="476" height="356" rx="52"
+          stroke="#0f172a" stroke-width="1.2" opacity="0.45"/>
+
+    <!-- Logo mark -->
+    <g transform="translate(44 44)">
+      <rect x="0" y="0" width="64" height="64" rx="20"
+            fill="#020617" stroke="#1e293b" stroke-width="1.2"/>
+      <path d="M18 46C22 34 26 30 32 28C39 26 44 27 50 30"
+            stroke="#22d3ee" stroke-width="2" stroke-linecap="round"/>
+      <path d="M18 36C22 30 26 28 32 27C39 26 44 27 50 29"
+            stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+      <path d="M28 18L40 18"
+            stroke="#22d3ee" stroke-width="2.1" stroke-linecap="round"/>
+      <circle cx="34" cy="18" r="3.2" fill="#22d3ee"/>
+    </g>
+
+    <!-- Title & subtitle -->
+    <g transform="translate(128 62)">
+      <rect x="0" y="-28" width="170" height="24" rx="12" fill="#0f172a" opacity="0.6"/>
+      <text x="4" y="-11" fill="#38bdf8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="11" font-weight="700" letter-spacing="2">
+        VAPEHERO PLACEHOLDER
+      </text>
+
+      <text x="0" y="16" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="24" font-weight="800">
+        *5H�1 ~�4A16 E-5HD
+      </text>
+      <text x="0" y="46" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="13" font-weight="500">
+        2E'F� �G 9�3� +(* F4/G ('4/ '�F *5H�1 FE'�4 /'/G E�4H/.
+      </text>
+    </g>
+
+    <!-- Right-side info pills -->
+    <g transform="translate(44 178)">
+      <rect x="0" y="0" width="140" height="32" rx="16" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+      <circle cx="18" cy="16" r="6" fill="#22d3ee"/>
+      <text x="32" y="20" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="11" font-weight="600">
+        ��� � ��� ~̩3D
+      </text>
+
+      <rect x="160" y="0" width="140" height="32" rx="16" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+      <circle cx="178" cy="16" r="6" fill="#2dd4bf"/>
+      <text x="192" y="20" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="11" font-weight="600">
+        A1E* SVG 3(�
+      </text>
+    </g>
+
+    <!-- Bottom hint bar -->
+    <g transform="translate(44 238)">
+      <rect x="0" y="0" width="352" height="40" rx="14"
+            fill="#020617" stroke="#1f2937" stroke-width="1"/>
+      <rect x="10" y="11" width="94" height="18" rx="9" fill="#0f172a"/>
+      <text x="20" y="24" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="11" font-weight="600">
+        /uploads/placeholder.svg
+      </text>
+      <text x="124" y="24" fill="#6b7280" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'PeydaWebFaNum', sans-serif"
+            font-size="11" font-weight="500">
+        E�*H'F�/ '�F "/13 1' /1 H�1'�4�1 E-5HD / /3*G '3*A'/G �F�/.
+      </text>
+    </g>
+  </g>
+</svg>
+

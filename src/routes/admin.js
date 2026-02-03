@@ -36,14 +36,20 @@ const uploadMedia = multer({
   storage: mediaStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|pdf|mp4|mp3|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    // اجازه تصاویر (شامل SVG)، ویدیو و PDF
+    const allowedTypes = /jpeg|jpg|png|gif|svg|pdf|mp4|mp3|webp/;
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
+    const mimetype =
+      allowedTypes.test(file.mimetype) || file.mimetype === 'image/svg+xml';
 
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('فقط فایل‌های تصویری، ویدیو و PDF مجاز هستند'));
+      cb(
+        new Error('فقط فایل‌های تصویری (از جمله SVG)، ویدیو و PDF مجاز هستند')
+      );
     }
   }
 });
@@ -55,32 +61,55 @@ router.use(requireAdmin);
 // GET /api/admin/stats - آمار داشبورد
 router.get('/stats', async (req, res) => {
   try {
+    const paidStatuses = ['paid', 'processing', 'shipped'];
+
     const [
       totalUsers,
       pendingUsers,
       totalOrders,
       pendingOrders,
-      totalRevenue,
-      monthlyRevenue
+      revenueOrders,
+      monthlyRevenueOrders
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { status: 'pending' } }),
       prisma.order.count(),
-      prisma.order.count({ where: { status: { in: ['pending_payment', 'paid'] } } }),
-      prisma.order.aggregate({
-        where: { status: { in: ['paid', 'processing', 'shipped'] } },
-        _sum: { final_amount: true }
+      prisma.order.count({
+        where: { status: { in: ['pending_payment', 'paid'] } }
       }),
-      prisma.order.aggregate({
+      prisma.order.findMany({
+        where: { status: { in: paidStatuses } },
+        select: { final_amount: true }
+      }),
+      prisma.order.findMany({
         where: {
-          status: { in: ['paid', 'processing', 'shipped'] },
+          status: { in: paidStatuses },
           created_at: {
             gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
           }
         },
-        _sum: { final_amount: true }
+        select: { final_amount: true }
       })
     ]);
+
+    const parseAmount = (value) => {
+      if (value == null) return 0;
+      const num =
+        typeof value === 'string'
+          ? parseFloat(value)
+          : Number(value);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    const totalRevenue = revenueOrders.reduce(
+      (sum, o) => sum + parseAmount(o.final_amount),
+      0
+    );
+
+    const monthlyRevenue = monthlyRevenueOrders.reduce(
+      (sum, o) => sum + parseAmount(o.final_amount),
+      0
+    );
 
     res.json({
       users: {
@@ -92,8 +121,8 @@ router.get('/stats', async (req, res) => {
         pending: pendingOrders
       },
       revenue: {
-        total: totalRevenue._sum.final_amount || 0,
-        monthly: monthlyRevenue._sum.final_amount || 0
+        total: totalRevenue,
+        monthly: monthlyRevenue
       }
     });
   } catch (error) {
@@ -293,7 +322,8 @@ router.get('/products', async (req, res) => {
     const parsedProducts = products.map(product => ({
       ...product,
       properties: product.properties ? JSON.parse(product.properties) : null,
-      colors: product.colors ? JSON.parse(product.colors) : null
+      colors: product.colors ? JSON.parse(product.colors) : null,
+      images: product.images ? JSON.parse(product.images) : null
     }));
 
     res.json({
@@ -333,7 +363,8 @@ router.post(
         ...req.body,
         price: req.body.price.toString(), // Convert to string for SQLite
         properties: req.body.properties ? JSON.stringify(req.body.properties) : null,
-        colors: req.body.colors ? JSON.stringify(req.body.colors) : null
+        colors: req.body.colors ? JSON.stringify(req.body.colors) : null,
+        images: req.body.images ? JSON.stringify(req.body.images) : null
       };
 
       const product = await prisma.product.create({
@@ -365,6 +396,9 @@ router.put('/products/:id', async (req, res) => {
     if (updateData.colors !== undefined) {
       updateData.colors = updateData.colors ? JSON.stringify(updateData.colors) : null;
     }
+    if (updateData.images !== undefined) {
+      updateData.images = updateData.images ? JSON.stringify(updateData.images) : null;
+    }
 
     const product = await prisma.product.update({
       where: { id: req.params.id },
@@ -375,7 +409,8 @@ router.put('/products/:id', async (req, res) => {
     const parsedProduct = {
       ...product,
       properties: product.properties ? JSON.parse(product.properties) : null,
-      colors: product.colors ? JSON.parse(product.colors) : null
+      colors: product.colors ? JSON.parse(product.colors) : null,
+      images: product.images ? JSON.parse(product.images) : null
     };
 
     res.json(parsedProduct);

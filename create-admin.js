@@ -1,27 +1,43 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Usage:
+//   npm run create-admin                -> creates default admin 09990000000
+//   node create-admin.js 09197916676   -> creates admin with that phone
+const cliPhone = process.argv[2];
+const phone = cliPhone && cliPhone.trim() !== '' ? cliPhone : '09990000000';
+
 async function createAdmin() {
   try {
-    // Check if admin already exists
+    // Check if user with this phone already exists
     const existingAdmin = await prisma.user.findUnique({
-      where: { phone: '09990000000' }
+      where: { phone }
     });
 
     if (existingAdmin) {
-      console.log('✅ Admin user already exists');
-      console.log('Phone: 09990000000');
-      console.log('Role:', existingAdmin.role);
-      console.log('Status:', existingAdmin.status);
+      // Ensure this user has full admin (super admin) privileges
+      const updated = await prisma.user.update({
+        where: { phone },
+        data: {
+          role: 'admin',
+          status: 'active',
+          vip_level: 'Diamond'
+        }
+      });
+
+      console.log('✅ Admin user updated (promoted to super admin)');
+      console.log('Phone:', updated.phone);
+      console.log('Role:', updated.role);
+      console.log('Status:', updated.status);
+      console.log('VIP Level:', updated.vip_level);
       return;
     }
 
-    // Create admin user
+    // Create admin user (super admin privileges via role=admin + active status)
     const admin = await prisma.user.create({
       data: {
-        phone: '09990000000',
+        phone,
         name: 'مدیر سیستم',
         store_name: 'دفتر مرکزی',
         role: 'admin',
@@ -33,11 +49,12 @@ async function createAdmin() {
     });
 
     console.log('✅ Admin user created successfully!');
-    console.log('Phone: 09990000000');
-    console.log('Name: مدیر سیستم');
-    console.log('Role: admin');
-    console.log('Status: active');
-    console.log('\n📱 You can now login with phone: 09990000000');
+    console.log('Phone:', admin.phone);
+    console.log('Name:', admin.name);
+    console.log('Role:', admin.role);
+    console.log('Status:', admin.status);
+    console.log('VIP Level:', admin.vip_level);
+    console.log('\n📱 You can now login with phone:', admin.phone);
   } catch (error) {
     console.error('❌ Error creating admin:', error);
   } finally {
@@ -46,4 +63,3 @@ async function createAdmin() {
 }
 
 createAdmin();
-

@@ -49,6 +49,56 @@ const upload = multer({
   }
 });
 
+// GET /api/orders - لیست سفارشات کاربر جاری
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = { user_id: req.user.id };
+    if (status) {
+      where.status = status;
+    }
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: {
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  image_main: true,
+                },
+              },
+            },
+          },
+        },
+        skip,
+        take: parseInt(limit),
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.order.count({ where }),
+    ]);
+
+    res.json({
+      orders,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error('Get Orders Error:', error);
+    res.status(500).json({ error: 'خطا در دریافت سفارشات' });
+  }
+});
+
 // POST /api/orders - ثبت سفارش جدید
 router.post(
   '/',

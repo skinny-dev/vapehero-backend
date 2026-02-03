@@ -11,6 +11,15 @@ const prisma = new PrismaClient();
 
 // تولید کد OTP 5 رقمی
 const generateOTP = () => {
+  const isTestMode =
+    process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
+
+  // In development / test mode, always use a fixed demo code
+  if (isTestMode) {
+    return '55555';
+  }
+
+  // In production, generate a random 5‑digit code
   return Math.floor(10000 + Math.random() * 90000).toString();
 };
 
@@ -84,8 +93,8 @@ router.post(
 
       const { phone, code } = req.body;
 
-      // Test mode: Accept test codes (1,2,3,4,5) in development
-      const TEST_OTP_CODES = ['1', '2', '3', '4', '5'];
+      // Test mode: Accept fixed demo code in development
+      const TEST_OTP_CODES = ['55555'];
       const isTestMode = process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
       const isTestCode = TEST_OTP_CODES.includes(code);
 
