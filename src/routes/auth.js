@@ -155,11 +155,12 @@ router.post(
         }
       }
 
-      // تولید JWT Token
+      const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+      const expiresInParsed = /^\d+$/.test(expiresIn) ? `${expiresIn}d` : expiresIn;
       const token = jwt.sign(
         { userId: user.id, phone: user.phone },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { expiresIn: expiresInParsed }
       );
 
       res.json({

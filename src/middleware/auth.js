@@ -56,7 +56,13 @@ export const authenticate = async (req, res, next) => {
       where: { id: decoded.userId }
     });
 
-    if (!user || user.status !== 'active') {
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or inactive user' });
+    }
+
+    // Admin roles can always authenticate (even if status is pending)
+    const adminRoles = ['super_admin', 'admin', 'manager'];
+    if (!adminRoles.includes(user.role) && user.status !== 'active') {
       return res.status(401).json({ error: 'Invalid or inactive user' });
     }
 
