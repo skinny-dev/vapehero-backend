@@ -9,12 +9,12 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { phone: '09990000000' },
-    update: {},
+    update: { role: 'super_admin', status: 'active' },
     create: {
       phone: '09990000000',
       name: 'مدیر سیستم',
       store_name: 'دفتر مرکزی',
-      role: 'admin',
+      role: 'super_admin',
       status: 'active',
       vip_level: 'Diamond',
       total_spent: '0',
@@ -23,13 +23,13 @@ async function main() {
   });
 
   const superAdmin = await prisma.user.upsert({
-    where: { phone: '09197916676' },
-    update: {},
+    where: { phone: '09938883360' },
+    update: { role: 'super_admin', status: 'active' },
     create: {
-      phone: '09197916676',
+      phone: '09938883360',
       name: 'سوپر ادمین',
       store_name: 'VapeHero HQ',
-      role: 'admin',
+      role: 'super_admin',
       status: 'active',
       vip_level: 'Diamond',
       total_spent: '0',
@@ -37,7 +37,45 @@ async function main() {
     }
   });
 
-  console.log('✅ Admin user:', admin.phone, '- SuperAdmin:', superAdmin.phone);
+  const superAdmin2 = await prisma.user.upsert({
+    where: { phone: '09197916676' },
+    update: { role: 'super_admin', status: 'active' },
+    create: {
+      phone: '09197916676',
+      name: 'سوپر ادمین ۲',
+      store_name: 'VapeHero HQ',
+      role: 'super_admin',
+      status: 'active',
+      vip_level: 'Diamond',
+      total_spent: '0',
+      wallet_balance: '0'
+    }
+  });
+
+  console.log('✅ Super admins:', admin.phone, superAdmin.phone, superAdmin2.phone);
+
+  // --- Default Permissions (for role-based access) ---
+  const defaultPermissions = [
+    { key: 'users.view', name: 'مشاهده کاربران', description: 'دسترسی به لیست و جزئیات کاربران' },
+    { key: 'users.edit', name: 'ویرایش کاربران', description: 'ویرایش اطلاعات کاربران' },
+    { key: 'users.delete', name: 'حذف کاربران', description: 'حذف کاربران' },
+    { key: 'users.approve', name: 'تایید کاربران', description: 'تایید درخواست همکاری کاربران' },
+    { key: 'users.reject', name: 'رد کاربران', description: 'رد درخواست همکاری کاربران' },
+    { key: 'users.manage', name: 'مدیریت کاربران', description: 'ایجاد و مدیریت نقش کاربران' },
+    { key: 'orders.view', name: 'مشاهده سفارشات', description: 'دسترسی به لیست و جزئیات سفارشات' },
+    { key: 'orders.update_status', name: 'تغییر وضعیت سفارش', description: 'تغییر وضعیت و کد رهگیری سفارشات' },
+    { key: 'permissions.view', name: 'مشاهده مجوزها', description: 'مشاهده لیست مجوزها و مجوزهای کاربران' },
+    { key: 'permissions.manage', name: 'مدیریت مجوزها', description: 'ایجاد، ویرایش و حذف مجوزها و تخصیص به کاربران' }
+  ];
+
+  for (const p of defaultPermissions) {
+    await prisma.permission.upsert({
+      where: { key: p.key },
+      update: { name: p.name, description: p.description },
+      create: p
+    });
+  }
+  console.log('✅ Default permissions seeded:', defaultPermissions.length);
 
   // --- Categories (Bulk) ---
 

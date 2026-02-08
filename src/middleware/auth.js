@@ -125,7 +125,7 @@ export const requirePermission = (...permissions) => {
   };
 };
 
-export const requireAdmin = requireRole('admin', 'manager');
+export const requireAdmin = requireRole('super_admin', 'admin', 'manager');
 export const requireWriter = requireRole('admin', 'writer', 'manager');
 
 

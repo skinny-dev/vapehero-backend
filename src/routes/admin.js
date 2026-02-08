@@ -58,9 +58,63 @@ const uploadMedia = multer({
   }
 });
 
-// همه route های admin نیازمند احراز هویت و نقش admin هستند
+// همه route های admin نیازمند احراز هویت و نقش admin/super_admin هستند
 router.use(authenticate);
 router.use(requireAdmin);
+
+// GET /api/admin/me - اطلاعات کاربر جاری (برای چک کردن نقش و مجوزها)
+router.get('/me', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        store_name: true,
+        role: true,
+        status: true,
+        vip_level: true,
+        userPermissions: {
+          include: { permission: true }
+        }
+      }
+    });
+    if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
+    const permissions = user.userPermissions.map((up) => up.permission.key);
+    res.json({
+      ...user,
+      permissions,
+      userPermissions: undefined
+    });
+  } catch (error) {
+    console.error('Get Me Error:', error);
+    res.status(500).json({ error: 'خطا در دریافت اطلاعات کاربر' });
+  }
+});
+
+// GET /api/admin/roles - لیست نقش‌های موجود (برای فرم‌ها)
+router.get('/roles', async (req, res) => {
+  const roles = [
+    { value: 'super_admin', label: 'سوپر ادمین', description: 'دسترسی کامل به تمام بخش‌ها' },
+    { value: 'admin', label: 'ادمین', description: 'مدیریت بر اساس مجوزها' },
+    { value: 'manager', label: 'مدیر', description: 'دسترسی محدودتر از ادمین' },
+    { value: 'writer', label: 'نویسنده', description: 'مدیریت محتوا و مقالات' },
+    { value: 'user', label: 'کاربر', description: 'همکار عادی' }
+  ];
+  res.json({ roles });
+});
+
+// GET /api/admin/statuses - لیست وضعیت‌های کاربر (برای فرم‌ها)
+router.get('/statuses', async (req, res) => {
+  const statuses = [
+    { value: 'pending', label: 'در انتظار تایید' },
+    { value: 'active', label: 'فعال' },
+    { value: 'rejected', label: 'رد شده' },
+    { value: 'banned', label: 'مسدود شده' }
+  ];
+  res.json({ statuses });
+});
 
 // GET /api/admin/stats - آمار داشبورد
 router.get('/stats', async (req, res) => {
@@ -479,6 +533,54 @@ router.patch('/products/:id/status', async (req, res) => {
 
 // ========== مدیریت کاربران ==========
 
+// POST /api/admin/users - ایجاد کاربر جدید (فقط super_admin می‌تواند super_admin ایجاد کند)
+router.post(
+  '/users',
+  requirePermission('users.manage'),
+  [
+    body('phone').notEmpty().withMessage('شماره تلفن الزامی است'),
+    body('role').isIn(['super_admin', 'admin', 'manager', 'writer', 'user']).withMessage('نقش نامعتبر است')
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { phone, name, store_name, role } = req.body;
+
+      // فقط super_admin می‌تواند super_admin یا admin ایجاد کند
+      if (['super_admin', 'admin'].includes(role) && req.user.role !== 'super_admin') {
+        return res.status(403).json({ error: 'فقط سوپر ادمین می‌تواند ادمین یا سوپر ادمین ایجاد کند' });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { phone: phone.trim() } });
+      if (existing) {
+        return res.status(400).json({ error: 'شماره تلفن قبلاً ثبت شده است' });
+      }
+
+      const user = await prisma.user.create({
+        data: {
+          phone: phone.trim(),
+          name: name || null,
+          store_name: store_name || null,
+          role: role || 'user',
+          status: 'active',
+          vip_level: 'Bronze',
+          total_spent: '0',
+          wallet_balance: '0'
+        }
+      });
+
+      res.status(201).json(user);
+    } catch (error) {
+      console.error('Create User Error:', error);
+      res.status(500).json({ error: 'خطا در ایجاد کاربر' });
+    }
+  }
+);
+
 // GET /api/admin/users
 router.get('/users', requirePermission('users.view'), async (req, res) => {
   try {
@@ -487,6 +589,7 @@ router.get('/users', requirePermission('users.view'), async (req, res) => {
 
     const where = {};
     if (status) where.status = status;
+    if (req.query.role) where.role = req.query.role;
     if (search) {
       where.OR = [
         { phone: { contains: search, mode: 'insensitive' } },
@@ -587,7 +690,12 @@ router.get('/users/:id', requirePermission('users.view'), async (req, res) => {
 router.put('/users/:id', requirePermission('users.edit'), async (req, res) => {
   try {
     const { name, store_name, role, status, vip_level, wallet_balance } = req.body;
-    
+
+    // فقط super_admin می‌تواند نقش super_admin یا admin را تغییر دهد
+    if (role !== undefined && ['super_admin', 'admin'].includes(role) && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'فقط سوپر ادمین می‌تواند نقش ادمین یا سوپر ادمین را تنظیم کند' });
+    }
+
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (store_name !== undefined) updateData.store_name = store_name;
@@ -657,6 +765,44 @@ router.patch('/users/:id/reject', requirePermission('users.reject'), async (req,
   } catch (error) {
     console.error('Reject User Error:', error);
     res.status(500).json({ error: 'خطا در رد کاربر' });
+  }
+});
+
+// PATCH /api/admin/users/:id/ban - مسدود کردن کاربر
+router.patch('/users/:id/ban', requirePermission('users.edit'), async (req, res) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'کاربر یافت نشد' });
+
+    // super_admin را نمی‌توان مسدود کرد
+    if (target.role === 'super_admin') {
+      return res.status(403).json({ error: 'نمی‌توان سوپر ادمین را مسدود کرد' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { status: 'banned' }
+    });
+
+    res.json({ message: 'کاربر مسدود شد', user });
+  } catch (error) {
+    console.error('Ban User Error:', error);
+    res.status(500).json({ error: 'خطا در مسدود کردن کاربر' });
+  }
+});
+
+// PATCH /api/admin/users/:id/unban - رفع مسدودیت کاربر
+router.patch('/users/:id/unban', requirePermission('users.edit'), async (req, res) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { status: 'active' }
+    });
+
+    res.json({ message: 'مسدودیت کاربر برداشته شد', user });
+  } catch (error) {
+    console.error('Unban User Error:', error);
+    res.status(500).json({ error: 'خطا در رفع مسدودیت' });
   }
 });
 

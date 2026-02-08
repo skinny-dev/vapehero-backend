@@ -3,10 +3,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Usage:
-//   npm run create-admin                -> creates default admin 09990000000
-//   node create-admin.js 09197916676   -> creates admin with that phone
+//   npm run create-admin                -> creates super_admin 09938883360
+//   node create-admin.js 09197916676   -> creates super_admin with that phone
 const cliPhone = process.argv[2];
-const phone = cliPhone && cliPhone.trim() !== '' ? cliPhone : '09990000000';
+const phone = cliPhone && cliPhone.trim() !== '' ? cliPhone : '09938883360';
 
 async function createAdmin() {
   try {
@@ -16,17 +16,17 @@ async function createAdmin() {
     });
 
     if (existingAdmin) {
-      // Ensure this user has full admin (super admin) privileges
+      // Ensure this user has full super_admin privileges
       const updated = await prisma.user.update({
         where: { phone },
         data: {
-          role: 'admin',
+          role: 'super_admin',
           status: 'active',
           vip_level: 'Diamond'
         }
       });
 
-      console.log('✅ Admin user updated (promoted to super admin)');
+      console.log('✅ Admin user updated (promoted to super_admin)');
       console.log('Phone:', updated.phone);
       console.log('Role:', updated.role);
       console.log('Status:', updated.status);
@@ -34,13 +34,13 @@ async function createAdmin() {
       return;
     }
 
-    // Create admin user (super admin privileges via role=admin + active status)
+    // Create super_admin user
     const admin = await prisma.user.create({
       data: {
         phone,
         name: 'مدیر سیستم',
         store_name: 'دفتر مرکزی',
-        role: 'admin',
+        role: 'super_admin',
         status: 'active',
         vip_level: 'Diamond',
         total_spent: '0',
