@@ -1,7 +1,11 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { body, validationResult } from 'express-validator';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import {
+  authenticate,
+  requireAdmin,
+  requirePermission
+} from '../middleware/auth.js';
 import { sendNotification } from '../utils/sms.js';
 import { updateInventoryAfterPayment } from '../utils/inventory.js';
 import { updateVIPLevel } from '../utils/vip.js';
@@ -476,7 +480,7 @@ router.patch('/products/:id/status', async (req, res) => {
 // ========== مدیریت کاربران ==========
 
 // GET /api/admin/users
-router.get('/users', async (req, res) => {
+router.get('/users', requirePermission('users.view'), async (req, res) => {
   try {
     const { page = 1, limit = 20, status, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -528,7 +532,7 @@ router.get('/users', async (req, res) => {
 });
 
 // PATCH /api/admin/users/:id/approve - تایید کاربر
-router.patch('/users/:id/approve', async (req, res) => {
+router.patch('/users/:id/approve', requirePermission('users.approve'), async (req, res) => {
   try {
     const user = await prisma.user.update({
       where: { id: req.params.id },
@@ -552,13 +556,18 @@ router.patch('/users/:id/approve', async (req, res) => {
 });
 
 // GET /api/admin/users/:id
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id', requirePermission('users.view'), async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
       include: {
         _count: {
           select: { orders: true, posts: true }
+        },
+        userPermissions: {
+          include: {
+            permission: true
+          }
         }
       }
     });
@@ -575,7 +584,7 @@ router.get('/users/:id', async (req, res) => {
 });
 
 // PUT /api/admin/users/:id
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', requirePermission('users.edit'), async (req, res) => {
   try {
     const { name, store_name, role, status, vip_level, wallet_balance } = req.body;
     
@@ -600,7 +609,7 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // DELETE /api/admin/users/:id
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', requirePermission('users.delete'), async (req, res) => {
   try {
     // بررسی وجود سفارشات
     const user = await prisma.user.findUnique({
@@ -634,7 +643,7 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // PATCH /api/admin/users/:id/reject - رد کاربر
-router.patch('/users/:id/reject', async (req, res) => {
+router.patch('/users/:id/reject', requirePermission('users.reject'), async (req, res) => {
   try {
     const user = await prisma.user.update({
       where: { id: req.params.id },
@@ -654,7 +663,7 @@ router.patch('/users/:id/reject', async (req, res) => {
 // ========== مدیریت سفارشات ==========
 
 // GET /api/admin/orders
-router.get('/orders', async (req, res) => {
+router.get('/orders', requirePermission('orders.view'), async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -709,7 +718,10 @@ router.get('/orders', async (req, res) => {
 });
 
 // PATCH /api/admin/orders/:id/status - تغییر وضعیت سفارش
-router.patch('/orders/:id/status', async (req, res) => {
+router.patch(
+  '/orders/:id/status',
+  requirePermission('orders.update_status'),
+  async (req, res) => {
   try {
     const { status, tracking_code } = req.body;
 
@@ -801,6 +813,190 @@ router.put('/settings', async (req, res) => {
     res.status(500).json({ error: 'خطا در به‌روزرسانی تنظیمات' });
   }
 });
+
+// ========== مدیریت نقش‌ها و مجوزها ==========
+// این API ها برای صفحه مدیریت دسترسی‌ها در پنل ادمین استفاده می‌شوند
+
+// GET /api/admin/permissions - لیست تمام مجوزها
+router.get(
+  '/permissions',
+  requirePermission('permissions.view'),
+  async (req, res) => {
+    try {
+      const permissions = await prisma.permission.findMany({
+        orderBy: { key: 'asc' }
+      });
+
+      res.json({ permissions });
+    } catch (error) {
+      console.error('Get Permissions Error:', error);
+      res.status(500).json({ error: 'خطا در دریافت مجوزها' });
+    }
+  }
+);
+
+// POST /api/admin/permissions - ایجاد مجوز جدید
+router.post(
+  '/permissions',
+  requirePermission('permissions.manage'),
+  async (req, res) => {
+    try {
+      const { key, name, description } = req.body;
+
+      if (!key || !name) {
+        return res
+          .status(400)
+          .json({ error: 'کلید و نام مجوز الزامی است' });
+      }
+
+      const permission = await prisma.permission.create({
+        data: {
+          key,
+          name,
+          description: description || null
+        }
+      });
+
+      res.status(201).json(permission);
+    } catch (error) {
+      console.error('Create Permission Error:', error);
+      res.status(500).json({ error: 'خطا در ایجاد مجوز' });
+    }
+  }
+);
+
+// PUT /api/admin/permissions/:id - ویرایش مجوز
+router.put(
+  '/permissions/:id',
+  requirePermission('permissions.manage'),
+  async (req, res) => {
+    try {
+      const { name, description } = req.body;
+
+      const permission = await prisma.permission.update({
+        where: { id: req.params.id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(description !== undefined && { description })
+        }
+      });
+
+      res.json(permission);
+    } catch (error) {
+      console.error('Update Permission Error:', error);
+      res.status(500).json({ error: 'خطا در به‌روزرسانی مجوز' });
+    }
+  }
+);
+
+// DELETE /api/admin/permissions/:id - حذف مجوز
+router.delete(
+  '/permissions/:id',
+  requirePermission('permissions.manage'),
+  async (req, res) => {
+    try {
+      await prisma.userPermission.deleteMany({
+        where: { permission_id: req.params.id }
+      });
+
+      await prisma.permission.delete({
+        where: { id: req.params.id }
+      });
+
+      res.json({ message: 'مجوز حذف شد' });
+    } catch (error) {
+      console.error('Delete Permission Error:', error);
+      res.status(500).json({ error: 'خطا در حذف مجوز' });
+    }
+  }
+);
+
+// GET /api/admin/users/:id/permissions - دریافت مجوزهای یک کاربر
+router.get(
+  '/users/:id/permissions',
+  requirePermission('permissions.view'),
+  async (req, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.params.id },
+        include: {
+          userPermissions: {
+            include: { permission: true }
+          }
+        }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'کاربر یافت نشد' });
+      }
+
+      const permissions = user.userPermissions.map((up) => up.permission);
+
+      res.json({ permissions });
+    } catch (error) {
+      console.error('Get User Permissions Error:', error);
+      res.status(500).json({ error: 'خطا در دریافت مجوزهای کاربر' });
+    }
+  }
+);
+
+// PUT /api/admin/users/:id/permissions - تنظیم مجوزهای کاربر
+router.put(
+  '/users/:id/permissions',
+  requirePermission('permissions.manage'),
+  async (req, res) => {
+    try {
+      const { permissions } = req.body;
+
+      if (!Array.isArray(permissions)) {
+        return res
+          .status(400)
+          .json({ error: 'permissions باید آرایه‌ای از کلیدها باشد' });
+      }
+
+      // اطمینان از وجود تمام مجوزها، در صورت نیاز آن‌ها را ایجاد کن
+      const existingPermissions = await prisma.permission.findMany({
+        where: { key: { in: permissions } }
+      });
+      const existingKeys = new Set(existingPermissions.map((p) => p.key));
+
+      const toCreate = permissions.filter((key) => !existingKeys.has(key));
+
+      if (toCreate.length > 0) {
+        const created = await Promise.all(
+          toCreate.map((key) =>
+            prisma.permission.create({
+              data: {
+                key,
+                name: key,
+                description: null
+              }
+            })
+          )
+        );
+        existingPermissions.push(...created);
+      }
+
+      // پاک کردن مجوزهای قبلی کاربر
+      await prisma.userPermission.deleteMany({
+        where: { user_id: req.params.id }
+      });
+
+      // تنظیم مجوزهای جدید
+      await prisma.userPermission.createMany({
+        data: existingPermissions.map((p) => ({
+          user_id: req.params.id,
+          permission_id: p.id
+        }))
+      });
+
+      res.json({ message: 'مجوزهای کاربر به‌روزرسانی شد' });
+    } catch (error) {
+      console.error('Set User Permissions Error:', error);
+      res.status(500).json({ error: 'خطا در تنظیم مجوزهای کاربر' });
+    }
+  }
+);
 
 // GET /api/admin/vip-tiers - دریافت تنظیمات سطوح VIP
 router.get('/vip-tiers', async (req, res) => {

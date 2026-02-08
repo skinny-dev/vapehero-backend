@@ -12,35 +12,41 @@ export const authenticate = async (req, res, next) => {
     }
 
     // Development mode: Allow mock admin token
-    if (process.env.NODE_ENV === 'development' && token === 'mock-admin-token') {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      token === 'mock-admin-token'
+    ) {
       const mockAdmin = await prisma.user.findFirst({
-        where: { 
-          role: 'admin',
+        where: {
+          role: { in: ['admin', 'super_admin'] },
           status: 'active'
         }
       });
-      
+
       if (mockAdmin) {
         req.user = mockAdmin;
         return next();
       }
-      
-      // If no admin exists, create a temporary one
+
+      // If no admin exists, create a temporary super admin
       const tempAdmin = await prisma.user.upsert({
         where: { phone: '09990000000' },
-        update: {},
+        update: {
+          role: 'super_admin',
+          status: 'active'
+        },
         create: {
           phone: '09990000000',
           name: 'مدیر سیستم',
           store_name: 'دفتر مرکزی',
-          role: 'admin',
+          role: 'super_admin',
           status: 'active',
           vip_level: 'Diamond',
           total_spent: '0',
           wallet_balance: '0'
         }
       });
-      
+
       req.user = tempAdmin;
       return next();
     }
@@ -68,15 +74,58 @@ export const requireRole = (...roles) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
+    // super_admin همیشه مجوز دارد
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      return res.status(403).json({ error: 'Insufficient role permissions' });
     }
 
     next();
   };
 };
 
-export const requireAdmin = requireRole('admin');
-export const requireWriter = requireRole('admin', 'writer');
+// Permission-based access control
+export const requirePermission = (...permissions) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      // super_admin has all permissions
+      if (req.user.role === 'super_admin') {
+        return next();
+      }
+
+      const userPermissions = await prisma.userPermission.findMany({
+        where: { user_id: req.user.id },
+        include: { permission: true }
+      });
+
+      const permissionKeys = new Set(
+        userPermissions.map((up) => up.permission.key)
+      );
+
+      const hasPermission = permissions.some((p) => permissionKeys.has(p));
+
+      if (!hasPermission) {
+        return res
+          .status(403)
+          .json({ error: 'Insufficient action permissions' });
+      }
+
+      next();
+    } catch (error) {
+      console.error('Permission check error:', error.message);
+      return res.status(500).json({ error: 'Permission check failed' });
+    }
+  };
+};
+
+export const requireAdmin = requireRole('admin', 'manager');
+export const requireWriter = requireRole('admin', 'writer', 'manager');
 
 

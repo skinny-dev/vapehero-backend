@@ -7,21 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  super_admin
+  admin
+  manager
+  writer
+  user
+}
+
 model User {
-  id             String    @id @default(uuid())
-  phone          String    @unique
-  name           String?
-  store_name     String?
-  role           String    @default("user")
-  status         String    @default("pending")
-  vip_level      String    @default("Bronze")
-  total_spent    String    @default("0")
-  wallet_balance String    @default("0")
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
-  orders         Order[]
-  posts          Post[]
-  receipts       Receipt[]
+  id              String           @id @default(uuid())
+  phone           String           @unique
+  name            String?
+  store_name      String?
+  role            UserRole         @default(user)
+  status          String           @default("pending")
+  vip_level       String           @default("Bronze")
+  total_spent     String           @default("0")
+  wallet_balance  String           @default("0")
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+  orders          Order[]
+  posts           Post[]
+  receipts        Receipt[]
+  userPermissions UserPermission[]
 
   @@index([phone])
   @@index([status])
@@ -205,8 +214,35 @@ model Media {
   created_by    String?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
-
+ 
   @@index([category])
   @@index([created_at])
   @@map("media")
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  key             String           @unique
+  name            String
+  description     String?
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+  userPermissions UserPermission[]
+
+  @@index([key])
+  @@map("permissions")
+}
+
+model UserPermission {
+  id            String     @id @default(uuid())
+  user_id       String
+  permission_id String
+  created_at    DateTime   @default(now())
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, permission_id])
+  @@index([user_id])
+  @@index([permission_id])
+  @@map("user_permissions")
 }

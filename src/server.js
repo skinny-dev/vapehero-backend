@@ -1,3 +1,5 @@
+console.log('[Boot] Starting server...');
+import './env-fix.js'; // Fix DATABASE_URL before Prisma loads
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -18,6 +20,12 @@ dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Health check FIRST - before any middleware (for platform liveness probes)
+app.get('/', (req, res) => res.json({ status: 'ok', service: 'vapehero-backend' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/ready', (req, res) => res.json({ status: 'ok' }));
+app.get('/live', (req, res) => res.json({ status: 'ok' }));
 
 // Middleware
 const allowedOrigins = process.env.FRONTEND_URL 
@@ -66,11 +74,6 @@ const authLimiter = rateLimit({
 app.use('/api/auth', authLimiter); // Strict limit for auth
 app.use('/api/', generalLimiter); // General limit for all other API routes
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 // Serve static files (uploads)
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -104,7 +107,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
