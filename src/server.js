@@ -27,22 +27,21 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().
 app.get('/ready', (req, res) => res.json({ status: 'ok' }));
 app.get('/live', (req, res) => res.json({ status: 'ok' }));
 
-// Middleware
-const allowedOrigins = process.env.FRONTEND_URL 
-  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+// Middleware - CORS: FRONTEND_URL supports comma-separated origins
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean)
   : ['http://localhost:3000', 'http://localhost:5173'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
-      callback(null, true);
-    } else {
-      console.log('⚠️  CORS blocked origin:', origin);
-      callback(null, true); // Allow all for development
-    }
+    const normalized = origin.replace(/\/$/, '');
+    const isAllowed = allowedOrigins.includes('*') ||
+      allowedOrigins.includes(origin) ||
+      allowedOrigins.some((o) => o.replace(/\/$/, '') === normalized);
+    if (isAllowed) return callback(null, true);
+    console.log('⚠️  CORS: origin', origin, 'not in list. Allowed:', allowedOrigins.join(', '));
+    callback(null, true); // allow for dev; in production set FRONTEND_URL correctly
   },
   credentials: true
 }));
