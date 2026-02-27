@@ -328,7 +328,12 @@ router.post('/categories/bulk', async (req, res) => {
         continue;
       }
 
-      const parent_id = row.parent_id ? String(row.parent_id).trim() : null;
+      let parent_id = row.parent_id ? String(row.parent_id).trim() : null;
+      if (!parent_id && row.parent_slug) {
+        const parentSlug = String(row.parent_slug).trim();
+        const parent = await prisma.category.findUnique({ where: { slug: parentSlug } });
+        if (parent) parent_id = parent.id;
+      }
       const image = row.image ? String(row.image).trim() : null;
       const description = row.description != null ? String(row.description) : null;
       const order = row.order != null ? parseInt(row.order, 10) || 0 : 0;
@@ -536,7 +541,12 @@ router.post('/products/bulk', async (req, res) => {
       const name = row.name != null ? String(row.name).trim() : '';
       const slug = row.slug ? String(row.slug).trim() : (name ? slugify(name) : '');
       const price = row.price != null ? String(row.price).trim() : '';
-      const category_id = row.category_id != null ? String(row.category_id).trim() : '';
+      let category_id = row.category_id != null ? String(row.category_id).trim() : '';
+      if (!category_id && row.category_slug) {
+        const catSlug = String(row.category_slug).trim();
+        const cat = await prisma.category.findUnique({ where: { slug: catSlug } });
+        if (cat) category_id = cat.id;
+      }
 
       if (!name) {
         errors.push({ row: i + 1, message: 'نام الزامی است' });
@@ -551,7 +561,7 @@ router.post('/products/bulk', async (req, res) => {
         continue;
       }
       if (!category_id) {
-        errors.push({ row: i + 1, message: 'category_id الزامی است' });
+        errors.push({ row: i + 1, message: 'category_id یا category_slug الزامی است' });
         continue;
       }
 

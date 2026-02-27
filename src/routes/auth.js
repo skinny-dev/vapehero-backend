@@ -155,6 +155,12 @@ router.post(
         }
       }
 
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        console.error('JWT_SECRET is not set — login tokens will be invalid');
+        return res.status(500).json({ error: 'خطا در پیکربندی سرور. لطفا با پشتیبانی تماس بگیرید.' });
+      }
+
       let expiresIn = (process.env.JWT_EXPIRES_IN || '7d').trim();
       if (expiresIn === '0' || expiresIn === '0d' || expiresIn === '0s') {
         expiresIn = '7d';
@@ -162,7 +168,7 @@ router.post(
       const expiresInParsed = /^\d+$/.test(expiresIn) ? `${expiresIn}d` : expiresIn;
       const token = jwt.sign(
         { userId: user.id, phone: user.phone },
-        process.env.JWT_SECRET,
+        secret,
         { expiresIn: expiresInParsed }
       );
 

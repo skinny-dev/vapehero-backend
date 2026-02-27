@@ -51,7 +51,12 @@ export const authenticate = async (req, res, next) => {
       return next();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET;
+    if (!secret || !secret.trim()) {
+      console.error('JWT_SECRET is not set — admin auth will fail');
+      return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET not set' });
+    }
+    const decoded = jwt.verify(token, secret);
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId }
     });
@@ -69,7 +74,8 @@ export const authenticate = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth error:', error.message);
+    const reason = error.name === 'TokenExpiredError' ? 'expired' : error.name === 'JsonWebTokenError' ? 'invalid' : error.message;
+    console.error('Auth error:', reason, error.message);
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
