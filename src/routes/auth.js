@@ -106,9 +106,14 @@ router.post(
         console.log(`✅ Test OTP code accepted: ${code} for ${phone}`);
         isValidOTP = true;
       } else {
-        // Normal OTP verification from Redis
-        const storedCode = await getOTP(phone);
-        isValidOTP = storedCode && storedCode === code;
+        // Normal OTP verification from Redis (or in-memory fallback)
+        try {
+          const storedCode = await getOTP(phone);
+          isValidOTP = storedCode && storedCode === code;
+        } catch (otpErr) {
+          console.error('OTP lookup error (treating as invalid):', otpErr?.message || otpErr);
+          isValidOTP = false;
+        }
       }
 
       if (!isValidOTP) {
@@ -117,7 +122,11 @@ router.post(
 
       // حذف OTP استفاده شده (only if not test code)
       if (!isTestCode) {
-        await deleteOTP(phone);
+        try {
+          await deleteOTP(phone);
+        } catch (_) {
+          // Non-fatal; OTP already validated
+        }
       }
 
       // پیدا کردن یا ایجاد کاربر
@@ -185,8 +194,14 @@ router.post(
         }
       });
     } catch (error) {
-      console.error('Verify OTP Error:', error);
-      res.status(500).json({ error: 'خطا در تایید کد' });
+      console.error('Verify OTP Error:', error?.message || error);
+      if (error?.stack) console.error(error.stack);
+      const isDev = process.env.NODE_ENV === 'development';
+      const userMessage = 'خطا در تایید کد. لطفاً دوباره تلاش کنید یا کد جدید دریافت کنید.';
+      res.status(500).json({
+        error: userMessage,
+        ...(isDev && error?.message && { details: error.message }),
+      });
     }
   }
 );

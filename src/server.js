@@ -60,13 +60,17 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Strict rate limiter for auth endpoints (to prevent brute force)
+// Rate limiter for auth endpoints (send-otp + verify-otp); returns JSON so frontend can show message
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 50 : 10, // 50 requests in dev, 10 in production
-  message: 'Too many authentication attempts, please try again later.',
+  max: isDevelopment ? 150 : 40, // 150 in dev, 40 in production (per IP)
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res, _next, options) => {
+    res.status(429).json({
+      error: 'تعداد درخواست‌های ورود بیش از حد است. لطفاً ۱۵ دقیقه دیگر تلاش کنید.',
+    });
+  },
 });
 
 // Apply rate limiting
