@@ -8,15 +8,28 @@ import { setOTP, getOTP, deleteOTP } from '../utils/redis.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const DEV_OTP_CODE = '55555';
+
+const isProduction = process.env.NODE_ENV === 'production';
+const canUseDevOTPBypass = () => {
+  // Never allow bypass in production, even if env is misconfigured.
+  if (isProduction) return false;
+  return process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
+};
+
+const normalizeIranPhone = (value) => {
+  if (!value || typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('+98')) return `0${trimmed.slice(3)}`;
+  if (trimmed.startsWith('98') && trimmed.length >= 12) return `0${trimmed.slice(2)}`;
+  return trimmed;
+};
 
 // تولید کد OTP 5 رقمی
 const generateOTP = () => {
-  const isTestMode =
-    process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
-
-  // In development / test mode, always use a fixed demo code
-  if (isTestMode) {
-    return '55555';
+  // In non-production environments, keep one deterministic OTP for developer UX.
+  if (canUseDevOTPBypass()) {
+    return DEV_OTP_CODE;
   }
 
   // In production, generate a random 5‑digit code
@@ -39,7 +52,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { phone } = req.body;
+      const phone = normalizeIranPhone(req.body.phone);
       const code = generateOTP();
 
       // ذخیره OTP در Redis
@@ -51,9 +64,11 @@ router.post(
       } catch (smsError) {
         console.error('SMS Sending Error:', smsError);
         // در حالت development، خطا را نادیده می‌گیریم و ادامه می‌دهیم
-        if (process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true') {
+        if (!isProduction) {
           console.log('⚠️ SMS sending failed, but continuing in development mode');
         } else {
+          // OTP should not stay valid when message failed in production.
+          await deleteOTP(phone).catch(() => {});
           // در production، خطا را برمی‌گردانیم
           return res.status(500).json({ 
             error: 'خطا در ارسال پیامک. لطفا دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.',
@@ -64,14 +79,15 @@ router.post(
 
       res.json({
         message: 'کد تایید ارسال شد',
+        resend_after_seconds: 120,
         // در حالت development، کد را برمی‌گردانیم
-        ...(process.env.NODE_ENV === 'development' && { code })
+        ...(!isProduction && { code })
       });
     } catch (error) {
       console.error('Send OTP Error:', error);
       res.status(500).json({ 
         error: error.message || 'خطا در ارسال کد تایید',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: !isProduction ? error.message : undefined
       });
     }
   }
@@ -91,32 +107,29 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { phone, code } = req.body;
+      const phone = normalizeIranPhone(req.body.phone);
+      const { code } = req.body;
 
-      // Test mode: Accept fixed demo code in development
-      const TEST_OTP_CODES = ['55555'];
-      const isTestMode = process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
-      const isTestCode = TEST_OTP_CODES.includes(code);
+      const allowDevBypass = canUseDevOTPBypass();
+      const isDevBypassCode = code === DEV_OTP_CODE;
+      const storedCode = await getOTP(phone);
 
       // بررسی OTP
       let isValidOTP = false;
-      
-      if (isTestMode && isTestCode) {
-        // In test mode, accept test codes without checking Redis
-        console.log(`✅ Test OTP code accepted: ${code} for ${phone}`);
+      if (allowDevBypass && isDevBypassCode) {
+        // In non-production environments, allow explicit dev bypass.
+        console.log(`✅ Dev OTP bypass accepted for ${phone}`);
         isValidOTP = true;
-      } else {
-        // Normal OTP verification from Redis
-        const storedCode = await getOTP(phone);
-        isValidOTP = storedCode && storedCode === code;
+      } else if (storedCode && storedCode === code) {
+        isValidOTP = true;
       }
 
       if (!isValidOTP) {
-        return res.status(401).json({ error: 'کد تایید نامعتبر است' });
+        return res.status(401).json({ error: 'کد تایید نامعتبر است یا منقضی شده است' });
       }
 
-      // حذف OTP استفاده شده (only if not test code)
-      if (!isTestCode) {
+      // حذف OTP استفاده شده (for normal verification path)
+      if (!isDevBypassCode) {
         await deleteOTP(phone);
       }
 
@@ -153,6 +166,10 @@ router.post(
         } else {
           console.error('❌ ioInstance is null in verify-otp - notification not sent!');
         }
+      }
+
+      if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ error: 'JWT secret پیکربندی نشده است' });
       }
 
       const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
@@ -208,7 +225,16 @@ router.post(
         return res.status(401).json({ error: 'Authentication required' });
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ error: 'JWT secret پیکربندی نشده است' });
+      }
+
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch {
+        return res.status(401).json({ error: 'توکن نامعتبر یا منقضی شده است' });
+      }
       const { name, store_name } = req.body;
 
       const user = await prisma.user.update({

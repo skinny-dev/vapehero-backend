@@ -106,7 +106,12 @@ router.post(
   orderLimiter,
   [
     body('items').isArray().notEmpty().withMessage('آیتم‌های سفارش الزامی است'),
-    body('items.*.product_id').notEmpty().withMessage('شناسه محصول الزامی است'),
+    body('items.*').custom((item) => {
+      if (!item?.product_id && !item?.productId) {
+        throw new Error('شناسه محصول الزامی است');
+      }
+      return true;
+    }),
     body('items.*.quantity').isInt({ min: 1 }).withMessage('تعداد باید بیشتر از صفر باشد'),
     body('shipping_address').optional().isString()
   ],
@@ -130,15 +135,20 @@ router.post(
       const orderItemsData = [];
 
       for (const item of items) {
+        const productId = item.product_id || item.productId;
         const product = await prisma.product.findUnique({
-          where: { id: item.product_id }
+          where: { id: productId }
         });
 
         if (!product) {
-          return res.status(404).json({ error: `محصول با شناسه ${item.product_id} یافت نشد` });
+          return res.status(404).json({ error: `محصول با شناسه ${productId} یافت نشد` });
         }
 
-        if (!product.in_stock || product.stock_count < item.quantity) {
+        if (!product.is_active) {
+          return res.status(400).json({ error: `محصول ${product.name} غیرفعال است` });
+        }
+
+        if (product.stock_count < item.quantity) {
           return res.status(400).json({ error: `موجودی محصول ${product.name} کافی نیست` });
         }
 

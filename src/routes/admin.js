@@ -19,6 +19,14 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 const prisma = new PrismaClient();
 
+const slugify = (value = '') =>
+  value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF]+/gi, '-')
+    .replace(/^-+|-+$/g, '');
+
 // Socket.io instance (will be set from server.js)
 let ioInstance = null;
 export const setIO = (io) => {
@@ -294,9 +302,27 @@ router.post(
 // PUT /api/admin/categories/:id
 router.put('/categories/:id', async (req, res) => {
   try {
+    const { name, slug, description, image, order, parent_id } = req.body;
+
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (slug !== undefined) data.slug = slug;
+    if (description !== undefined) data.description = description || null;
+    if (image !== undefined) data.image = image || null;
+    if (order !== undefined) data.order = Number(order) || 0;
+
+    // Prisma relational update: parent_id must be mapped to parent connect/disconnect.
+    if (parent_id !== undefined) {
+      if (!parent_id || parent_id === 'null') {
+        data.parent = { disconnect: true };
+      } else {
+        data.parent = { connect: { id: String(parent_id) } };
+      }
+    }
+
     const category = await prisma.category.update({
       where: { id: req.params.id },
-      data: req.body
+      data
     });
 
     res.json(category);
@@ -343,6 +369,94 @@ router.delete('/categories/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete Category Error:', error);
     res.status(500).json({ error: 'خطا در حذف دسته‌بندی' });
+  }
+});
+
+// POST /api/admin/categories/bulk
+router.post('/categories/bulk', async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.categories) ? req.body.categories : [];
+    if (!rows.length) {
+      return res.status(400).json({ error: 'categories باید یک آرایه غیرخالی باشد' });
+    }
+
+    const createdIds = [];
+    const errors = [];
+    const slugToId = new Map();
+
+    // Preload existing categories to support parent references by slug/id.
+    const existing = await prisma.category.findMany({
+      select: { id: true, slug: true }
+    });
+    existing.forEach((c) => slugToId.set(c.slug, c.id));
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || {};
+      const rowNumber = i + 1;
+
+      try {
+        const name = typeof row.name === 'string' ? row.name.trim() : '';
+        if (!name) {
+          throw new Error('name الزامی است');
+        }
+
+        const slug = (typeof row.slug === 'string' && row.slug.trim()) || slugify(name);
+        if (!slug) {
+          throw new Error('slug نامعتبر است');
+        }
+
+        // parent_id can be category UUID or category slug.
+        let parentId = null;
+        if (row.parent_id) {
+          const candidate = String(row.parent_id).trim();
+          parentId = slugToId.get(candidate) || candidate;
+
+          const parentExists = await prisma.category.findUnique({
+            where: { id: parentId },
+            select: { id: true }
+          });
+          if (!parentExists) {
+            throw new Error(`parent_id نامعتبر است: ${candidate}`);
+          }
+        }
+
+        const created = await prisma.category.create({
+          data: {
+            name,
+            slug,
+            description:
+              typeof row.description === 'string' && row.description.trim().length
+                ? row.description.trim()
+                : null,
+            image:
+              typeof row.image === 'string' && row.image.trim().length
+                ? row.image.trim()
+                : null,
+            parent_id: parentId,
+            order:
+              row.order !== undefined && row.order !== null && row.order !== ''
+                ? Number(row.order) || 0
+                : 0
+          },
+          select: { id: true, slug: true }
+        });
+
+        createdIds.push(created.id);
+        slugToId.set(created.slug, created.id);
+      } catch (err) {
+        errors.push({ row: rowNumber, message: err.message || 'خطای نامشخص' });
+      }
+    }
+
+    res.json({
+      created: createdIds.length,
+      total: rows.length,
+      createdIds,
+      errors
+    });
+  } catch (error) {
+    console.error('Bulk Create Categories Error:', error);
+    res.status(500).json({ error: 'خطا در ورود گروهی دسته‌بندی‌ها' });
   }
 });
 
@@ -489,6 +603,126 @@ router.delete('/products/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete Product Error:', error);
     res.status(500).json({ error: 'خطا در حذف محصول' });
+  }
+});
+
+// POST /api/admin/products/bulk
+router.post('/products/bulk', async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.products) ? req.body.products : [];
+    if (!rows.length) {
+      return res.status(400).json({ error: 'products باید یک آرایه غیرخالی باشد' });
+    }
+
+    const createdIds = [];
+    const errors = [];
+
+    // Support category references by id and by slug
+    const categories = await prisma.category.findMany({
+      select: { id: true, slug: true }
+    });
+    const categorySlugToId = new Map(categories.map((c) => [c.slug, c.id]));
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || {};
+      const rowNumber = i + 1;
+
+      try {
+        const name = typeof row.name === 'string' ? row.name.trim() : '';
+        if (!name) throw new Error('name الزامی است');
+
+        const rawPrice = row.price;
+        if (rawPrice === undefined || rawPrice === null || rawPrice === '') {
+          throw new Error('price الزامی است');
+        }
+        const parsedPrice = Number(rawPrice);
+        if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+          throw new Error('price نامعتبر است');
+        }
+
+        const slug = (typeof row.slug === 'string' && row.slug.trim()) || slugify(name);
+        if (!slug) throw new Error('slug نامعتبر است');
+
+        const categoryInput = row.category_id ?? row.category_slug ?? row.category;
+        if (!categoryInput) throw new Error('category_id الزامی است');
+        const categoryCandidate = String(categoryInput).trim();
+        const categoryId = categorySlugToId.get(categoryCandidate) || categoryCandidate;
+
+        const categoryExists = await prisma.category.findUnique({
+          where: { id: categoryId },
+          select: { id: true }
+        });
+        if (!categoryExists) throw new Error(`دسته‌بندی نامعتبر است: ${categoryCandidate}`);
+
+        const stockCount =
+          row.stock_count !== undefined && row.stock_count !== null && row.stock_count !== ''
+            ? Number(row.stock_count)
+            : 0;
+        if (!Number.isInteger(stockCount) || stockCount < 0) {
+          throw new Error('stock_count نامعتبر است');
+        }
+
+        const minOrder =
+          row.min_order !== undefined && row.min_order !== null && row.min_order !== ''
+            ? Number(row.min_order)
+            : 1;
+        if (!Number.isInteger(minOrder) || minOrder < 1) {
+          throw new Error('min_order نامعتبر است');
+        }
+
+        const imageMain =
+          typeof row.image_main === 'string' && row.image_main.trim().length
+            ? row.image_main.trim()
+            : typeof row.image === 'string' && row.image.trim().length
+            ? row.image.trim()
+            : null;
+
+        const parseBoolean = (value, fallback = true) => {
+          if (value === undefined || value === null || value === '') return fallback;
+          if (typeof value === 'boolean') return value;
+          const normalized = String(value).trim().toLowerCase();
+          if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+          if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+          return fallback;
+        };
+
+        const created = await prisma.product.create({
+          data: {
+            name,
+            slug,
+            description:
+              typeof row.description === 'string' && row.description.trim().length
+                ? row.description.trim()
+                : null,
+            price: parsedPrice.toString(),
+            category_id: categoryId,
+            image_main: imageMain,
+            images: row.images ? JSON.stringify(row.images) : null,
+            stock_count: stockCount,
+            min_order: minOrder,
+            in_stock: stockCount > 0,
+            is_active: parseBoolean(row.is_active, true),
+            properties: row.properties ? JSON.stringify(row.properties) : null,
+            colors: row.colors ? JSON.stringify(row.colors) : null
+          },
+          select: { id: true }
+        });
+
+        createdIds.push(created.id);
+      } catch (err) {
+        errors.push({ row: rowNumber, message: err.message || 'خطای نامشخص' });
+      }
+    }
+
+    res.json({
+      created: createdIds.length,
+      total: rows.length,
+      createdIds,
+      errors
+    });
+  } catch (error) {
+    console.error('Bulk Create Products Error:', error);
+    res.status(500).json({ error: 'خطا در ورود گروهی محصولات' });
   }
 });
 

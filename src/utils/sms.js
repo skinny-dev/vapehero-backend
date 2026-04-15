@@ -1,19 +1,18 @@
 // SMS Gateway integration - Kavenegar
 // Documentation: https://kavenegar.com/rest.html
 
-// Test OTP codes for development mode (1,2,3,4,5)
-const TEST_OTP_CODES = ['1', '2', '3', '4', '5'];
+const DEV_OTP_CODE = '55555';
 
 export const sendOTP = async (phone, code) => {
   try {
-    // Development mode: Allow test codes without sending SMS
+    // Development mode: bypass provider and print OTP for local testing.
     if (process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true') {
-      if (TEST_OTP_CODES.includes(code)) {
-        console.log(`✅ Test OTP accepted for ${phone}: ${code}`);
+      if (code === DEV_OTP_CODE) {
+        console.log(`✅ Dev OTP code active for ${phone}: ${code}`);
         return true;
       }
       console.log(`📱 [DEV MODE] OTP for ${phone}: ${code}`);
-      console.log(`💡 In development, you can use test codes: 1, 2, 3, 4, or 5`);
+      console.log(`💡 In development, you can use dev OTP code: ${DEV_OTP_CODE}`);
       return true;
     }
 
