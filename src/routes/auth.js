@@ -5,17 +5,13 @@ import { body, validationResult } from 'express-validator';
 import { otpLimiter } from '../middleware/rateLimit.js';
 import { sendOTP } from '../utils/sms.js';
 import { setOTP, getOTP, deleteOTP } from '../utils/redis.js';
+import { isOtpDevelopmentMode } from '../utils/otpMode.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 const DEV_OTP_CODE = '55555';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const canUseDevOTPBypass = () => {
-  // Never allow bypass in production, even if env is misconfigured.
-  if (isProduction) return false;
-  return process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true';
-};
+const canUseDevOTPBypass = () => isOtpDevelopmentMode();
 
 const normalizeIranPhone = (value) => {
   if (!value || typeof value !== 'string') return value;
@@ -63,13 +59,10 @@ router.post(
         await sendOTP(phone, code);
       } catch (smsError) {
         console.error('SMS Sending Error:', smsError);
-        // در حالت development، خطا را نادیده می‌گیریم و ادامه می‌دهیم
-        if (!isProduction) {
-          console.log('⚠️ SMS sending failed, but continuing in development mode');
+        if (isOtpDevelopmentMode()) {
+          console.log('⚠️ SMS sending failed, but continuing in OTP development mode');
         } else {
-          // OTP should not stay valid when message failed in production.
           await deleteOTP(phone).catch(() => {});
-          // در production، خطا را برمی‌گردانیم
           return res.status(500).json({ 
             error: 'خطا در ارسال پیامک. لطفا دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.',
             details: smsError.message 
@@ -80,14 +73,13 @@ router.post(
       res.json({
         message: 'کد تایید ارسال شد',
         resend_after_seconds: 120,
-        // در حالت development، کد را برمی‌گردانیم
-        ...(!isProduction && { code })
+        ...(isOtpDevelopmentMode() && { code })
       });
     } catch (error) {
       console.error('Send OTP Error:', error);
       res.status(500).json({ 
         error: error.message || 'خطا در ارسال کد تایید',
-        details: !isProduction ? error.message : undefined
+        details: isOtpDevelopmentMode() ? error.message : undefined
       });
     }
   }

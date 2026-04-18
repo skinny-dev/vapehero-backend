@@ -1,12 +1,13 @@
 // SMS Gateway integration - Kavenegar
 // Documentation: https://kavenegar.com/rest.html
 
+import { isOtpDevelopmentMode } from './otpMode.js';
+
 const DEV_OTP_CODE = '55555';
 
 export const sendOTP = async (phone, code) => {
   try {
-    // Development mode: bypass provider and print OTP for local testing.
-    if (process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true') {
+    if (isOtpDevelopmentMode()) {
       if (code === DEV_OTP_CODE) {
         console.log(`✅ Dev OTP code active for ${phone}: ${code}`);
         return true;
@@ -56,8 +57,7 @@ export const sendOTP = async (phone, code) => {
   } catch (error) {
     console.error('SMS Error:', error);
     
-    // In development, don't throw error, just log
-    if (process.env.NODE_ENV === 'development') {
+    if (isOtpDevelopmentMode()) {
       console.log(`📱 [DEV MODE] OTP for ${phone}: ${code}`);
       return true;
     }
@@ -68,8 +68,7 @@ export const sendOTP = async (phone, code) => {
 
 export const sendNotification = async (phone, message) => {
   try {
-    // Development mode: Skip sending
-    if (process.env.NODE_ENV === 'development' || process.env.SMS_TEST_MODE === 'true') {
+    if (isOtpDevelopmentMode()) {
       console.log(`📱 [DEV MODE] Notification for ${phone}: ${message}`);
       return true;
     }
