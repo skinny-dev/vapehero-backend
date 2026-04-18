@@ -125,8 +125,22 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3001;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 Server listening on 0.0.0.0:${PORT} (set PORT in Runflare to match the service port)`);
+  console.log(`📊 NODE_ENV=${process.env.NODE_ENV || 'development'} trust proxy=${app.get('trust proxy')}`);
+});
+
+server.on('error', (err) => {
+  console.error('[fatal] HTTP server failed to bind:', err.message);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaughtException:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[warn] unhandledRejection:', reason);
 });
 
 // Initialize Socket.io
