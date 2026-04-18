@@ -1,15 +1,14 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
+import { getMergedCorsOrigins } from "./config/corsOrigins.js";
 
 const prisma = new PrismaClient();
 
 export const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL
-        ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-        : ["http://localhost:3000", "http://localhost:5173"],
+      origin: getMergedCorsOrigins(),
       credentials: true,
     },
   });

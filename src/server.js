@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { getMergedCorsOrigins } from './config/corsOrigins.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -27,24 +28,30 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().
 app.get('/ready', (req, res) => res.json({ status: 'ok' }));
 app.get('/live', (req, res) => res.json({ status: 'ok' }));
 
-// Middleware - CORS: FRONTEND_URL supports comma-separated origins
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean)
-  : ['http://localhost:3000', 'http://localhost:5173'];
+// CORS: merge env with known production origins (see corsOrigins.js)
+const allowedOrigins = getMergedCorsOrigins();
 
-app.use(cors({
-  origin: (origin, callback) => {
+const corsOptions = {
+  origin(origin, callback) {
     if (!origin) return callback(null, true);
     const normalized = origin.replace(/\/$/, '');
-    const isAllowed = allowedOrigins.includes('*') ||
-      allowedOrigins.includes(origin) ||
-      allowedOrigins.some((o) => o.replace(/\/$/, '') === normalized);
-    if (isAllowed) return callback(null, true);
-    console.log('⚠️  CORS: origin', origin, 'not in list. Allowed:', allowedOrigins.join(', '));
-    callback(null, true); // allow for dev; in production set FRONTEND_URL correctly
+    const match = allowedOrigins.find(
+      (o) => o === origin || o.replace(/\/$/, '') === normalized,
+    );
+    if (match) return callback(null, origin);
+    if (allowedOrigins.includes('*')) return callback(null, origin);
+    // Unknown origin: reflect anyway (same as legacy) so staging / mis-set FRONTEND_URL still works
+    console.warn('⚠️  CORS: origin not in merged allowlist, reflecting anyway:', origin);
+    return callback(null, origin);
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length'],
+  maxAge: 86400,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -58,6 +65,8 @@ const generalLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Never burn the rate limit on CORS preflight (OPTIONS)
+  skip: (req) => req.method === 'OPTIONS',
 });
 
 // Strict rate limiter for auth endpoints (to prevent brute force)
@@ -67,6 +76,7 @@ const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
 });
 
 // Apply rate limiting
