@@ -20,6 +20,14 @@ import chatRoutes from './routes/chat.js';
 dotenv.config();
 
 const app = express();
+
+// Behind Runflare (or any reverse proxy): clients arrive with X-Forwarded-For.
+// express-rate-limit v7 validates this and throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// if trust proxy stays false — requests can fail (502 at edge, "CORS" in browser).
+// Use a hop count (not boolean true) to satisfy rate-limit's permissive-trust check.
+const trustHops = Number(process.env.TRUST_PROXY_HOPS);
+app.set('trust proxy', Number.isFinite(trustHops) && trustHops >= 0 ? trustHops : 1);
+
 const prisma = new PrismaClient();
 
 // Health check FIRST - before any middleware (for platform liveness probes)
